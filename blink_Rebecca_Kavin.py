@@ -9,8 +9,9 @@ from machine import Pin
 i = 0
 
 led = Pin(2, Pin.OUT)
-while True:
+while i < 10:
     led.value(1)
     sleep_ms(200)
     led.value(0)
     sleep_ms(200)
+     i += 1
