@@ -36,71 +36,89 @@ light_sensor.ATTN_11DB
 #print(var.read())  # read the variable resistor dial
 #lcd.putstr('l_sens: %d' % (4095 - light_sensor.read())) # read the light sensor wavelength (REVERSE IT)
 
-
 ## long beep alarm
-def long_alarm(alarm_duration):
+def boom_alarm(alarm_duration):
     buzzer.value(0) #on
-    utime.sleep(alarm_duration)
+    time.sleep(alarm_duration)
     buzzer.value(1) #off
-    
-## multiple beep alarm
-def quick_bounce_alarm(alarm_duration):
-    for i in range(5):
-        buzzer.value(0) #on
-        utime.sleep(alarm_duration)
-        buzzer.value(1) #off
-        utime.sleep(alarm_duration)
-#       
-      
-high_reading = 0 # min
-low_reading = 250 # max
+
+# def for making variable resistor in seconds
+def remap(value, var_min, var_max, new_min, new_max):
+    return (value - var_min) * (new_max - new_min) / (var_max - var_min) + new_min
+
+# def for making countdown clock
+def countdown(seconds):
+    while seconds > 0:
+        lcd.move_to(0, 1)
+        lcd.putstr(f"Remaining: {seconds:5.0f}s")
+        time.sleep(1)
+        seconds -= 1
+    lcd.clear()
+    lcd.move_to(0, 1)
+    lcd.putstr('BOOM!')
+
 start_time = time.time()
+i = 0
+r_button_pressed = False
 
 while True:
-    distance = sensor.distance_cm()
-    print('Distance:', distance, 'cm ah')
-    print(var.read())
-    time_value = time.time() - start_time
-    lcd.move_to(0, 0)
-    lcd.putstr(f'{time_value}{distance:5.1f}') # no flicker from clear screen
-
-    # update high
-    if distance < 250 and distance > high_reading:
-        high_reading = distance
-    #if distance < 250 and distance > 15: # thresh of 15
-        #long_alarm(1)
-
-    # update low
-    if distance < low_reading:
-        low_reading = distance
-    #if distance < 3: # thresh of 3
-        #quick_bounce_alarm(0.1)
-
-    lcd.move_to(0, 1)
-    
-    # dont print ugly 0 or 250
-    if high_reading == 0 or low_reading == 250:
-        lcd.putstr(f'H:{'--':>5} L:{'--':>5}') # no flicker from clear screen
-    else:
-        lcd.putstr(f'H:{high_reading:5.1f} L:{low_reading:5.1f}') # no flicker from clear screen
-
-    # button to reset low/high values
-    if l_button.value() == 0:
-        high_reading = 0
-        low_reading = 250
-        lcd.clear()
+    # determining counter time and the units
+    if i == 0:
+        time_value = time.time() - start_time
+        unit = 's'
+    elif i % 2 == 0:
+        time_value = (time.time() - start_time)
+        unit = 's'
+    elif i % 2 > 0:
         time_value = (time.time() - start_time) / 60
-        lcd.move_to(0, 0)
-        lcd.putstr(f'{time_value}{distance:5.1f}') # no flicker from clear screen
-        lcd.move_to(0, 1)
-        lcd.putstr(f'H:{'--':>5} L:{'--':>5}') # dont print ugly 0 or 250
-        time.sleep(1)
+        unit = 'min'
+    time_value = time_value
+    
+    #configure correct digits for defined units (no ugly digit for seconds)
+    if unit == 'min':
+        digit = '5.1f'
+    else:
+        digit = '7.0f'
+    
+    # put time and units on display
+    lcd.move_to(0, 0)
+    lcd.putstr(f'Time:{time_value:{digit}}{unit}') # no flicker from clear screen
+    
+    # convert variable resistor into variable timer and display current setting on display
+    raw_var = var.read()
+    mapped_value = remap(raw_var, 0, 4095, 0, 60)
+    lcd.move_to(0, 1)
+    lcd.putstr(f'V2:{mapped_value:4.0f}s')
+    
+    # print on comp the time, variable resistor, and variable timer every second
+    print(time_value, unit)
+    print(var.read())
+    print(mapped_value)
+    
+    # l_button pushed and we up count
+    if l_button.value() == 0:
+        i = i+1 
+        print(time_value)
         
-    if r_button.value() == 0:
+    # r_button pushed and we start countdown and turn on buzzer
+    if r_button.value() == 0 and r_button_pressed == False:
         lcd.clear()
         lcd.move_to(0, 0)
-        lcd.putstr(f'pushed right')
-        time.sleep(1)
+        lcd.putstr(f'Countdown')
+        countdown(mapped_value)
+        buzzer.value(0) #on
+        r_button_pressed = True
         
+                    
+    # r_button is pushed again and we restart device/count and stop the buzzer
+    if r_button.value() == 0 and r_button_pressed == True:
+        lcd.clear()
+        lcd.move_to(0, 0)
+        lcd.putstr(f'Restart')
+        buzzer.value(1) #off
+        r_button_pressed = False
+        time.sleep(1)
+        lcd.clear()
+        start_time = time.time()
         
     time.sleep(1)
